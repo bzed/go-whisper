@@ -406,6 +406,21 @@ func (whisper *Whisper) ArchiveInfos() []*archiveInfo {
 	return whisper.archives
 }
 
+/* Dump archives */
+func (whisper *Whisper) DumpArchives() ([]dataPoint, error) {
+	ret := make([]dataPoint, 0, 50)
+	for _, archive := range whisper.archives {
+		start := archive.Offset()
+		end := archive.End()
+		datapoints, err := whisper.readSeries(start, end, archive)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, datapoints...)
+	}
+	return ret, nil
+}
+
 /*
   Update a value in the database.
 
@@ -942,6 +957,10 @@ func (point *dataPoint) Bytes() []byte {
 	packInt(b, point.interval, 0)
 	packFloat64(b, point.value, IntSize)
 	return b
+}
+
+func (point *dataPoint) Point() (int, float64) {
+	return point.interval, point.value
 }
 
 func sum(values []float64) float64 {
