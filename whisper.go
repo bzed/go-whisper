@@ -401,6 +401,11 @@ func (whisper *Whisper) Retentions() []Retention {
 	return ret
 }
 
+/* Return archives */
+func (whisper *Whisper) ArchiveInfos() []*archiveInfo {
+	return whisper.archives
+}
+
 /*
   Update a value in the database.
 
