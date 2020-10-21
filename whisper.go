@@ -406,7 +406,9 @@ func (whisper *Whisper) ArchiveInfos() []*archiveInfo {
 	return whisper.archives
 }
 
-/* Dump archives */
+// DumpArchives dumps the data from all archives in the file
+// NOTIFICATION: data here is duplicated, see
+// https://github.com/bzed/whisper-to-graphite/issues/7
 func (whisper *Whisper) DumpArchives() ([]dataPoint, error) {
 	ret := make([]dataPoint, 0, 50)
 	for _, archive := range whisper.archives {
@@ -417,6 +419,55 @@ func (whisper *Whisper) DumpArchives() ([]dataPoint, error) {
 			return nil, err
 		}
 		ret = append(ret, datapoints...)
+	}
+	return ret, nil
+}
+
+// DumpDataPoints almost the same as DumpArchives,
+// but contains only the least aggregated data without blank points
+func (whisper *Whisper) DumpDataPoints() ([]dataPoint, error) {
+	ret := make([]dataPoint, 0, 50)
+	minInterval := int(time.Now().Unix())
+	var updateMin func([]dataPoint, int) int
+	updateMin = func(points []dataPoint, min int) int {
+		// We have to do search for min independently from filtering because data in archives is unordered
+		for _, point := range points {
+			if min > point.interval && point.interval != 0 {
+				min = point.interval
+			}
+		}
+		return min
+	}
+
+	var filterExisting func([]dataPoint, int) []dataPoint
+	filterExisting = func(points []dataPoint, min int) []dataPoint {
+		// Filter out points, newer then min for interval > 0
+		n := 0
+		for _, p := range points {
+			if p.interval != 0 && min > p.interval {
+				points[n] = p
+				n++
+			}
+		}
+		points = points[:n]
+		return points
+	}
+
+	for _, archive := range whisper.archives {
+		start := archive.Offset()
+		end := archive.End()
+		datapoints, err := whisper.readSeries(start, end, archive)
+		if err != nil {
+			return nil, err
+		}
+		if len(ret) == 0 {
+			minInterval = updateMin(datapoints, minInterval)
+			ret = append(ret, datapoints...)
+		} else {
+			datapoints = filterExisting(datapoints, minInterval)
+			minInterval = updateMin(datapoints, minInterval)
+			ret = append(ret, datapoints...)
+		}
 	}
 	return ret, nil
 }
